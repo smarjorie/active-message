@@ -10,6 +10,7 @@ import {
   getBusinessProfile,
   getTemplateDetails,
   listSubscribedApps,
+  listAccessibleWabas,
 } from "@/lib/meta-api";
 
 // Descricao reutilizada em toda ferramenta: o token nunca fica salvo no
@@ -23,6 +24,20 @@ const handler = createMcpHandler(
     // ============================================================
     // Ferramentas de WhatsApp Business Account (WABA)
     // ============================================================
+
+    server.tool(
+      "list_accessible_wabas",
+      "Descobre quais WhatsApp Business Accounts (WABAs) e numeros de telefone o token de acesso consegue enxergar, sem precisar informar waba_id previamente. Use esta ferramenta PRIMEIRO quando o usuario nao souber o waba_id — o resultado traz waba_id e phone_number_id de cada numero, prontos para usar nas demais ferramentas.",
+      {
+        access_token: z.string().describe(ACCESS_TOKEN_DESCRIPTION),
+      },
+      async ({ access_token }) => {
+        const wabas = await listAccessibleWabas(access_token);
+        return {
+          content: [{ type: "text", text: JSON.stringify(wabas, null, 2) }],
+        };
+      }
+    );
 
     server.tool(
       "list_message_templates",
