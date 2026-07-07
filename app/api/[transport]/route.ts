@@ -13,18 +13,11 @@ import {
   listAccessibleWabas,
 } from "@/lib/meta-api";
 
-// Descricao reutilizada em toda ferramenta: o token nunca fica salvo no
-// servidor (sem env var, sem banco) — ele trafega so na chamada e e usado
-// na hora, direto contra a Graph API.
 const ACCESS_TOKEN_DESCRIPTION =
   "Token de acesso da Meta com escopo whatsapp_business_management. Informado pelo usuario na conversa — nunca armazenado no servidor.";
 
 const handler = createMcpHandler(
   (server) => {
-    // ============================================================
-    // Ferramentas de WhatsApp Business Account (WABA)
-    // ============================================================
-
     server.tool(
       "list_accessible_wabas",
       "Descobre quais WhatsApp Business Accounts (WABAs) e numeros de telefone o token de acesso consegue enxergar, sem precisar informar waba_id previamente. Use esta ferramenta PRIMEIRO quando o usuario nao souber o waba_id — o resultado traz waba_id e phone_number_id de cada numero, prontos para usar nas demais ferramentas.",
