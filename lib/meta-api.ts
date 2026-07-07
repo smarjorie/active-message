@@ -60,6 +60,63 @@ async function followPaging(nextUrl: string | null, results: any[]) {
 // numero, e analytics de conversas/mensagens
 // ============================================================
 
+/**
+ * Descobre as WABAs (e respectivos numeros de telefone) acessiveis pelo
+ * token, sem precisar que o usuario ja saiba o waba_id de antemao.
+ * Percorre /me/businesses -> owned_whatsapp_business_accounts e
+ * client_whatsapp_business_accounts -> phone_numbers de cada WABA.
+ */
+export async function listAccessibleWabas(accessToken: string) {
+  const businesses = await metaFetch(accessToken, "/me/businesses", {
+    fields: "id,name",
+    limit: 100,
+  });
+
+  const results: any[] = [];
+
+  for (const biz of businesses.data || []) {
+    const wabaLists = await Promise.all([
+      metaFetch(accessToken, `/${biz.id}/owned_whatsapp_business_accounts`, {
+        fields: "id,name",
+        limit: 100,
+      }).catch(() => ({ data: [] })),
+      metaFetch(accessToken, `/${biz.id}/client_whatsapp_business_accounts`, {
+        fields: "id,name",
+        limit: 100,
+      }).catch(() => ({ data: [] })),
+    ]);
+
+    const wabas = [
+      ...(wabaLists[0].data || []).map((w: any) => ({ ...w, relationship: "owned" })),
+      ...(wabaLists[1].data || []).map((w: any) => ({ ...w, relationship: "client" })),
+    ];
+
+    for (const waba of wabas) {
+      let phoneNumbers: any[] = [];
+      try {
+        const phones = await metaFetch(accessToken, `/${waba.id}/phone_numbers`, {
+          fields: "id,display_phone_number,verified_name,quality_rating,messaging_limit_tier",
+          limit: 100,
+        });
+        phoneNumbers = phones.data || [];
+      } catch {
+        // sem acesso aos numeros dessa WABA especifica; segue sem eles
+      }
+
+      results.push({
+        business_id: biz.id,
+        business_name: biz.name,
+        waba_id: waba.id,
+        waba_name: waba.name,
+        relationship: waba.relationship,
+        phone_numbers: phoneNumbers,
+      });
+    }
+  }
+
+  return results;
+}
+
 export function getDefaultWabaId(): string | undefined {
   return process.env.META_WABA_ID;
 }
