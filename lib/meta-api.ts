@@ -166,8 +166,8 @@ export async function listPhoneNumberHealth(accessToken: string, wabaId: string)
 export async function getConversationAnalytics(params: {
   accessToken: string;
   wabaId: string;
-  start: number; // unix timestamp (seconds)
-  end: number; // unix timestamp (seconds)
+  start: number;
+  end: number;
   granularity?: "HALF_HOUR" | "DAILY" | "MONTHLY";
 }) {
   const { accessToken, wabaId, start, end, granularity = "DAILY" } = params;
