@@ -135,7 +135,7 @@ export async function listMessageTemplates(params: {
   const { accessToken, wabaId, limit = 100, category, status } = params;
   const queryParams: Record<string, any> = {
     fields:
-      "id,name,category,language,status,quality_score,components,rejected_reason",
+      "id,name,category,language,status,quality_score,components,rejected_reason,ad_id,ad_account_id,ad_campaign_id,ad_adset_id",
     limit,
   };
   if (category) queryParams.category = category;
@@ -189,8 +189,17 @@ export async function getTemplateAnalytics(params: {
   end: number;
   templateIds?: string[];
   granularity?: "DAILY";
+  metricTypes?: Array<"SENT" | "DELIVERED" | "READ" | "CLICKED" | "COST">;
 }) {
-  const { accessToken, wabaId, start, end, templateIds, granularity = "DAILY" } = params;
+  const {
+    accessToken,
+    wabaId,
+    start,
+    end,
+    templateIds,
+    granularity = "DAILY",
+    metricTypes = ["SENT", "DELIVERED", "READ", "CLICKED", "COST"],
+  } = params;
 
   const fieldsParts = [
     `start(${start})`,
@@ -200,9 +209,7 @@ export async function getTemplateAnalytics(params: {
   if (templateIds && templateIds.length > 0) {
     fieldsParts.push(`template_ids(${JSON.stringify(templateIds)})`);
   }
-  fieldsParts.push(
-    `metric_types(${JSON.stringify(["SENT", "DELIVERED", "READ", "CLICKED"])})`
-  );
+  fieldsParts.push(`metric_types(${JSON.stringify(metricTypes)})`);
 
   const data = await metaFetch(accessToken, `/${wabaId}`, {
     fields: `template_analytics.${fieldsParts.join(".")}`,
@@ -240,9 +247,132 @@ export async function getBusinessProfile(accessToken: string, phoneNumberId: str
 export async function getTemplateDetails(accessToken: string, templateId: string) {
   const data = await metaFetch(accessToken, `/${templateId}`, {
     fields:
-      "id,name,category,language,status,quality_score,components,rejected_reason,previous_category",
+      "id,name,category,language,status,quality_score,components,rejected_reason,previous_category,ad_id,ad_account_id,ad_campaign_id,ad_adset_id",
   });
   return data;
+}
+
+/**
+ * Metricas da Marketing Messages API for WhatsApp: mensagens enviadas,
+ * entregues, lidas, cliques no botao (CTA URL), taxas, e metricas de custo
+ * (valor gasto, custo por entrega, custo por clique no botao).
+ *
+ * Corresponde exatamente ao que aparece no WhatsApp Manager / aba
+ * "Marketing Messages" do Ads Manager para um template. O entity_id deve
+ * ser o ad_id, ad_campaign_id, ad_adset_id ou ad_account_id retornado por
+ * listMessageTemplates/getTemplateDetails (campos ad_id/ad_campaign_id/etc) —
+ * so existe depois que o template foi enviado pela Marketing Messages API
+ * for WhatsApp (nao pela Cloud API tradicional).
+ */
+const DEFAULT_MARKETING_INSIGHTS_FIELDS = [
+  "marketing_messages_sent",
+  "marketing_messages_delivered",
+  "marketing_messages_read",
+  "marketing_messages_delivery_rate",
+  "marketing_messages_read_rate",
+  "marketing_messages_link_btn_click",
+  "marketing_messages_link_btn_click_rate",
+  "marketing_messages_spend",
+  "marketing_messages_cost_per_delivered",
+  "marketing_messages_cost_per_link_btn_click",
+];
+
+/**
+ * Resolve automaticamente o objeto de anuncio (ad_campaign_id de preferencia,
+ * com fallback para ad_adset_id/ad_id/ad_account_id) vinculado a um template,
+ * para que quem chama a ferramenta nao precise saber/colar nenhum ID de
+ * campanha manualmente — so o ID (ou nome) do template.
+ */
+export async function resolveTemplateAdEntity(accessToken: string, templateId: string) {
+  const details = await getTemplateDetails(accessToken, templateId);
+
+  const entityId = details.ad_campaign_id || details.ad_id || details.ad_adset_id || details.ad_account_id;
+  const resolvedFrom = details.ad_campaign_id
+    ? "ad_campaign_id"
+    : details.ad_id
+    ? "ad_id"
+    : details.ad_adset_id
+    ? "ad_adset_id"
+    : details.ad_account_id
+    ? "ad_account_id"
+    : null;
+
+  if (!entityId) {
+    throw new Error(
+      `O template "${details.name || templateId}" nao tem nenhum objeto de anuncio vinculado (ad_id/ad_campaign_id/ad_adset_id/ad_account_id). ` +
+        `Isso normalmente significa que ele nao foi enviado via Marketing Messages API for WhatsApp (so via Cloud API tradicional), ` +
+        `ou que a WABA ainda nao esta registrada na Marketing Messages API for WhatsApp — nesse caso use get_template_analytics em vez desta ferramenta.`
+    );
+  }
+
+  return {
+    template_id: details.id,
+    template_name: details.name,
+    entity_id: entityId,
+    resolved_from: resolvedFrom,
+    ad_id: details.ad_id,
+    ad_campaign_id: details.ad_campaign_id,
+    ad_adset_id: details.ad_adset_id,
+    ad_account_id: details.ad_account_id,
+  };
+}
+
+/**
+ * Encontra o(s) template_id(s) de um template pelo nome (a Graph API nao
+ * tem filtro server-side por nome nesse endpoint, entao filtramos aqui).
+ */
+export async function findTemplatesByName(params: {
+  accessToken: string;
+  wabaId: string;
+  name: string;
+}) {
+  const { accessToken, wabaId, name } = params;
+  const all = await listMessageTemplates({ accessToken, wabaId, limit: 250 });
+  const needle = name.trim().toLowerCase();
+  return all.filter((t: any) => (t.name || "").toLowerCase().includes(needle));
+}
+
+export async function getMarketingMessageInsights(params: {
+  accessToken: string;
+  entityId: string;
+  since?: string;
+  until?: string;
+  datePreset?: string;
+  fields?: string[];
+  includeConversions?: boolean;
+}) {
+  const {
+    accessToken,
+    entityId,
+    since,
+    until,
+    datePreset,
+    fields,
+    includeConversions = false,
+  } = params;
+
+  let selectedFields = fields && fields.length > 0 ? fields : DEFAULT_MARKETING_INSIGHTS_FIELDS;
+  if (includeConversions) {
+    selectedFields = [
+      ...selectedFields,
+      "marketing_messages_website_add_to_cart",
+      "marketing_messages_website_initiate_checkout",
+      "marketing_messages_website_purchase",
+      "marketing_messages_website_purchase_values",
+    ];
+  }
+
+  const queryParams: Record<string, any> = {
+    fields: selectedFields.join(","),
+  };
+  if (since && until) {
+    queryParams.time_range = JSON.stringify({ since, until });
+  } else if (datePreset) {
+    queryParams.date_preset = datePreset;
+  }
+
+  const data = await metaFetch(accessToken, `/${entityId}/insights`, queryParams);
+  return data.data || data;
 }
 
 /**
