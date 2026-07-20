@@ -1,5 +1,7 @@
 # Active Notifications MCP
 
+MCP Criado para ajudar no consumo dos dados de notificação ativa, a fim de, enriquecer os insights e métricas dos clientes
+
 ## Ferramentas disponíveis
 
 Todas recebem `access_token` como parâmetro obrigatório.
