@@ -4,8 +4,6 @@ MCP Criado para ajudar no consumo dos dados de notificação ativa, a fim de, en
 
 ## Ferramentas disponíveis
 
-Todas recebem `access_token` como parâmetro obrigatório.
-
 - **get_waba_info** — nome, timezone, namespace de templates, moeda, status de verificação do negócio.
 - **list_message_templates** — lista templates (marketing/utility/authentication) com status
   de aprovação (APPROVED/REJECTED/PENDING/PAUSED/DISABLED) e quality rating (GREEN/YELLOW/RED).
@@ -17,5 +15,9 @@ Todas recebem `access_token` como parâmetro obrigatório.
 - **get_conversation_analytics** — volume de conversas por categoria
   (marketing/utility/authentication/service) e por número, num período.
 - **list_subscribed_apps** — apps/integrações inscritos nos webhooks da WABA (diagnóstico de integração).
+
+## Como utilizar
+
+- Basta add o MCP como, MCP customizado na ferramenta da sua escolha e aproveitar todas as ferramentas acima.
 
 Só leitura — nenhuma ferramenta cria, edita, envia ou pausa nada.
